@@ -7,6 +7,8 @@
 #
 # The command gets SOC_RUN_ID, SOC_OUTPUT_DIR (local) and SOC_OUTPUT_URI (gs://...) in its
 # environment and must itself resume from the latest checkpoint under SOC_OUTPUT_URI.
+# Set SOC_OUTPUT_NAME when registering to share one output directory across several jobs
+# (e.g. batches of one rollout run); it defaults to the run_id.
 set -euo pipefail
 # shellcheck source=/dev/null
 source /etc/soc.env
@@ -21,12 +23,14 @@ else
   [[ -e "$jobs/$run_id.cmd" ]] && { echo "run_id $run_id already registered"; exit 1; }
   printf '%q ' "$@" > "$jobs/$run_id.cmd"
   echo "$stage" > "$jobs/$run_id.stage"
+  echo "${SOC_OUTPUT_NAME:-$run_id}" > "$jobs/$run_id.output"
 fi
 
 stage="$(cat "$jobs/$run_id.stage")"
+output_name="$(cat "$jobs/$run_id.output" 2>/dev/null || echo "$run_id")"
 export SOC_RUN_ID="$run_id"
-export SOC_OUTPUT_DIR="/home/$SOC_USER/outputs/$run_id"
-export SOC_OUTPUT_URI="gs://$SOC_BUCKET/$stage/$run_id"
+export SOC_OUTPUT_DIR="/home/$SOC_USER/outputs/$output_name"
+export SOC_OUTPUT_URI="gs://$SOC_BUCKET/$stage/$output_name"
 mkdir -p "$SOC_OUTPUT_DIR"
 echo $$ > "$jobs/$run_id.pid"
 trap 'rm -f "$jobs/$run_id.pid"' EXIT

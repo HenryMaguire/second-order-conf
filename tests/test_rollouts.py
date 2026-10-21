@@ -178,3 +178,33 @@ def test_max_shards_limits_work(config):
 
 def test_smoke_config_matches_frozen():
     R.check_frozen(R.RolloutConfig.from_yaml(R.ROOT / "configs" / "stage0_smoke.yaml"))
+
+
+def test_batches_extend_the_same_run(config):
+    gen = FakeGenerator()
+    out = R.main(str(config), generator=gen, load=QUESTIONS.__getitem__, shards={"bigmath_val": 1})
+    assert gen.calls == 1
+    assert not (out / "counts" / "gpqa_diamond.parquet").exists()
+    assert pd.read_parquet(out / "counts" / "bigmath_val.parquet").qid.tolist() == [
+        "bmd-0",
+        "bmd-1",
+        "bmd-2",
+    ]
+    gen2 = FakeGenerator()
+    R.main(
+        str(config),
+        generator=gen2,
+        load=QUESTIONS.__getitem__,
+        shards={"bigmath_val": 3, "gpqa_diamond": 1},
+    )
+    assert gen2.calls == 3  # bigmath shards 1 and 2, gpqa shard 0; shard 0 is reused
+    counts = pd.read_parquet(out / "counts" / "bigmath_val.parquet")
+    assert counts.k.tolist() == list(range(7))
+    assert len((out / "invocations.jsonl").read_text().splitlines()) == 2
+
+
+def test_parse_shards():
+    assert R.parse_shards("bigmath_train=4, bigmath_val=2") == {
+        "bigmath_train": 4,
+        "bigmath_val": 2,
+    }

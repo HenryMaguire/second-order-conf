@@ -8,8 +8,9 @@ for spec in "$SOC_JOBS_DIR"/*.cmd; do
   [[ -e "$spec" ]] || continue
   run_id="$(basename "$spec" .cmd)"
   [[ -e "$SOC_JOBS_DIR/$run_id.done" ]] && continue
-  local_dir="/home/$SOC_USER/outputs/$run_id"
+  output_name="$(cat "$SOC_JOBS_DIR/$run_id.output" 2>/dev/null || echo "$run_id")"
+  local_dir="/home/$SOC_USER/outputs/$output_name"
   [[ -d "$local_dir" ]] || continue
   stage="$(cat "$SOC_JOBS_DIR/$run_id.stage" 2>/dev/null || echo misc)"
-  timeout 25 gcloud storage rsync -r "$local_dir" "gs://$SOC_BUCKET/$stage/$run_id" || true
+  timeout 25 gcloud storage rsync -r "$local_dir" "gs://$SOC_BUCKET/$stage/$output_name" || true
 done

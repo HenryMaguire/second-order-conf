@@ -42,7 +42,9 @@ class RolloutConfig:
     max_new_tokens: int = 2048
     seed: int = 0
     shard_size: int = 250
-    max_shards: int | None = None  # smoke tests: stop after this many shards per split
+    # Stop after this many shards: one int for every split, or {split: n}. Raising the limit on
+    # the same run_id continues the run, since finished shards are skipped (batched runs).
+    max_shards: int | dict[str, int] | None = None
     chat_template_kwargs: dict = field(default_factory=dict)
     vllm: dict = field(default_factory=dict)
     wandb_project: str | None = None
@@ -112,8 +114,9 @@ def run_split(cfg, split, questions: list[Question], gen: Generator, out: Path, 
     shard_dir = out / "rollouts" / split
     shard_dir.mkdir(parents=True, exist_ok=True)
     shards = [questions[i : i + cfg.shard_size] for i in range(0, len(questions), cfg.shard_size)]
-    if cfg.max_shards is not None:
-        shards = shards[: cfg.max_shards]
+    limit = cfg.max_shards.get(split) if isinstance(cfg.max_shards, dict) else cfg.max_shards
+    if limit is not None:
+        shards = shards[:limit]
     for idx, chunk in enumerate(shards):
         path = shard_dir / f"shard-{idx:05d}.parquet"
         if path.exists():
@@ -167,8 +170,26 @@ def summarize(shard_dir: Path, qids: list[str], n: int):
     return g
 
 
-def main(config_path: str, generator: Generator | None = None, load=None) -> Path:
+def parse_shards(arg: str) -> dict[str, int]:
+    """'bigmath_train=4,bigmath_val=2' -> {'bigmath_train': 4, 'bigmath_val': 2}."""
+    out = {}
+    for part in arg.split(","):
+        split, n = part.split("=")
+        out[split.strip()] = int(n)
+    return out
+
+
+def main(
+    config_path: str,
+    generator: Generator | None = None,
+    load=None,
+    shards: dict[str, int] | None = None,
+) -> Path:
     cfg = RolloutConfig.from_yaml(config_path)
+    if shards is not None:
+        # Batched run: only the named splits, each up to its shard limit.
+        cfg.splits = [s for s in cfg.splits if s in shards]
+        cfg.max_shards = shards
     frozen = check_frozen(cfg)
     out = Path(os.environ.get("SOC_OUTPUT_DIR", ROOT / "outputs" / cfg.run_id))
     uri = os.environ.get("SOC_OUTPUT_URI")
@@ -190,6 +211,11 @@ def main(config_path: str, generator: Generator | None = None, load=None) -> Pat
     }
     out.mkdir(parents=True, exist_ok=True)
     (out / "run.json").write_text(json.dumps(meta, indent=2))
+    with open(out / "invocations.jsonl", "a") as f:  # one line per batch, for provenance
+        f.write(
+            json.dumps({**meta, "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
+            + "\n"
+        )
 
     log = print
     if cfg.wandb_project:
@@ -207,4 +233,7 @@ def main(config_path: str, generator: Generator | None = None, load=None) -> Pat
 
 
 if __name__ == "__main__":
-    main(sys.argv[1])
+    # python -m soc.rollouts.run CONFIG [--shards split=n,split=n]
+    args = sys.argv[1:]
+    shard_arg = args[args.index("--shards") + 1] if "--shards" in args else None
+    main(args[0], shards=parse_shards(shard_arg) if shard_arg else None)
