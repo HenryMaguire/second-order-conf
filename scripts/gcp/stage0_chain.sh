@@ -7,6 +7,8 @@
 #   SOC_OUTPUT_NAME=rollouts-qwen35-2b-v1 scripts/gcp/supervise.sh stage0 stage0-chain -- \
 #     scripts/gcp/stage0_chain.sh
 set -euo pipefail
+# shellcheck source=/dev/null
+source /etc/soc.env  # SOC_JOBS_DIR etc. (written by vm_startup.sh)
 cd "$(dirname "$0")/../.."
 # shellcheck source=stage0_shards.sh
 source scripts/gcp/stage0_shards.sh
