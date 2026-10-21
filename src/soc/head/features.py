@@ -77,9 +77,16 @@ def main(config_path: str, splits: list[str]) -> None:
     cfg = RolloutConfig.from_yaml(config_path)
     out = Path(os.environ.get("SOC_OUTPUT_DIR", ROOT / "outputs" / cfg.run_id))
     uri = os.environ.get("SOC_OUTPUT_URI")
-    tok, model = load_model(cfg.model, cfg.vllm.get("revision"))
     (out / "features").mkdir(parents=True, exist_ok=True)
+    storage.sync_down(uri, out)
+    if all((out / "features" / f"{s}.npz").exists() for s in splits):
+        print("all features exist")
+        return
+    tok, model = load_model(cfg.model, cfg.vllm.get("revision"))
     for split in splits:
+        if (out / "features" / f"{split}.npz").exists():
+            print(f"{split}: features exist, skipping")
+            continue
         qs = load_split(split)
         feats, layers = extract(qs, tok, model, cfg.chat_template_kwargs)
         np.savez(
