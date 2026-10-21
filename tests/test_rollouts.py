@@ -163,3 +163,18 @@ def test_judge_pass_adds_judged_counts(tmp_path, monkeypatch):
     assert counts.k.tolist() == [0, 31]  # exact match only
     assert counts.k_judged.tolist() == [32, 31]
     assert Client.calls == 2  # one call per distinct non-matching answer
+
+
+def test_max_shards_limits_work(config):
+    cfg = yaml.safe_load(config.read_text())
+    cfg["max_shards"] = 1
+    config.write_text(yaml.safe_dump(cfg))
+    gen = FakeGenerator()
+    out = R.main(str(config), generator=gen, load=QUESTIONS.__getitem__)
+    assert gen.calls == 2  # one shard per split
+    counts = pd.read_parquet(out / "counts" / "bigmath_val.parquet")
+    assert counts.qid.tolist() == ["bmd-0", "bmd-1", "bmd-2"]
+
+
+def test_smoke_config_matches_frozen():
+    R.check_frozen(R.RolloutConfig.from_yaml(R.ROOT / "configs" / "stage0_smoke.yaml"))

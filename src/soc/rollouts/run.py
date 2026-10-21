@@ -42,6 +42,7 @@ class RolloutConfig:
     max_new_tokens: int = 1024
     seed: int = 0
     shard_size: int = 250
+    max_shards: int | None = None  # smoke tests: stop after this many shards per split
     chat_template_kwargs: dict = field(default_factory=dict)
     vllm: dict = field(default_factory=dict)
     wandb_project: str | None = None
@@ -111,6 +112,8 @@ def run_split(cfg, split, questions: list[Question], gen: Generator, out: Path, 
     shard_dir = out / "rollouts" / split
     shard_dir.mkdir(parents=True, exist_ok=True)
     shards = [questions[i : i + cfg.shard_size] for i in range(0, len(questions), cfg.shard_size)]
+    if cfg.max_shards is not None:
+        shards = shards[: cfg.max_shards]
     for idx, chunk in enumerate(shards):
         path = shard_dir / f"shard-{idx:05d}.parquet"
         if path.exists():
@@ -139,7 +142,8 @@ def run_split(cfg, split, questions: list[Question], gen: Generator, out: Path, 
             }
         )
         yield path
-    counts = summarize(shard_dir, [q.qid for q in questions], cfg.n)
+    covered = [q.qid for chunk in shards for q in chunk]
+    counts = summarize(shard_dir, covered, cfg.n)
     (out / "counts").mkdir(exist_ok=True)
     counts.to_parquet(out / "counts" / f"{split}.parquet", index=False)
     yield out / "counts" / f"{split}.parquet"
