@@ -11,7 +11,9 @@ import json
 
 from soc.data.sources import Kind, Question
 
-TEMPLATE_VERSION = "answer-v1"
+# v2: the tag instruction is restated at the end of the user turn, and the "The final answer
+# is ..." wording is gone; under v1, 9% of TriviaQA replies copied that wording without tags.
+TEMPLATE_VERSION = "answer-v2"
 
 SYSTEM = (
     "Solve the problem. Reason briefly, step by step, then write only the final answer "
@@ -19,9 +21,12 @@ SYSTEM = (
 )
 
 ANSWER_INSTRUCTIONS: dict[Kind, str] = {
-    "math": "The final answer is a number. Write it as an integer or decimal, with no units.",
-    "mcq": "The final answer is the letter of the correct option.",
-    "short": "The final answer is a short phrase, such as a name, number or date.",
+    "math": "Give your final answer inside <answer></answer> tags, as an integer or decimal "
+    "with no units.",
+    "mcq": "Give your final answer inside <answer></answer> tags, as the letter of the correct "
+    "option.",
+    "short": "Give your final answer inside <answer></answer> tags, as a short phrase such as "
+    "a name, number or date.",
 }
 
 TEMPLATE_HASH = hashlib.sha256(

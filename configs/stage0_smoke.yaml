@@ -1,9 +1,9 @@
 # Smoke test before the full Stage 0 run: one 50-question shard each of BigMath val (math
 # parsing) and TriviaQA (short answers). Check acc, parse rate and truncation in the log and
 # counts/*.parquet before launching configs/stage0_rollouts.yaml.
-#   scripts/gcp/supervise.sh stage0 smoke-qwen35-2b-v2 -- \
+#   scripts/gcp/supervise.sh stage0 smoke-qwen35-2b-v3 -- \
 #     uv run --extra gpu python -m soc.rollouts.run configs/stage0_smoke.yaml
-run_id: smoke-qwen35-2b-v2
+run_id: smoke-qwen35-2b-v3
 model: Qwen/Qwen3.5-2B
 splits: [bigmath_val, triviaqa]
 n: 32
