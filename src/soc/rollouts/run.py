@@ -39,7 +39,7 @@ class RolloutConfig:
     splits: list[str]
     n: int = 32
     temperature: float = 0.7
-    max_new_tokens: int = 1024
+    max_new_tokens: int = 2048
     seed: int = 0
     shard_size: int = 250
     max_shards: int | None = None  # smoke tests: stop after this many shards per split

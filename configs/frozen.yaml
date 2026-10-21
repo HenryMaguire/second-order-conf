@@ -6,7 +6,7 @@ prompt_template:
 rollouts:
   n: 32
   temperature: 0.7
-  max_new_tokens: 1024
+  max_new_tokens: 2048
 seed: 20261021
 sources:
   bigmath_train_pool:

@@ -26,4 +26,4 @@ def test_split_files_match_frozen():
 
 
 def test_rollout_settings_match_plan():
-    assert FROZEN["rollouts"] == {"n": 32, "temperature": 0.7, "max_new_tokens": 1024}
+    assert FROZEN["rollouts"] == {"n": 32, "temperature": 0.7, "max_new_tokens": 2048}

@@ -30,7 +30,7 @@ All 21 setup questions use the suggested defaults; change any row here and the r
 | 3 | Budget, timeline | ≤ $500 GPU for Stages 0–1; Stage 2 ceiling $2,000 (assumed, needs your OK); 4–6 weeks to the Stage 1 gate |
 | 4 | Success | Concrete gate thresholds in Evaluation |
 | 5 | Model | Qwen3.5-2B instruct for Stages 0–1; next size up (\~4B if one exists) for Stage 2 |
-| 6 | Reasoning | Instruct model, short reasoning, max 1,024 new tokens |
+| 6 | Reasoning | Instruct model, short reasoning (thinking mode off), max 2,048 new tokens; raised from 1,024 after the smoke test cut off 51% of BigMath rollouts |
 | 7 | Training data | BigMathDigits (RLCR/CALIBER split) |
 | 8 | OOD evaluation | GPQA Diamond, TriviaQA, SimpleQA |
 | 9 | Verification | Programmatic for training; cheap LLM judge for TriviaQA/SimpleQA evaluation only |
@@ -98,7 +98,7 @@ With the answering model frozen, each question's solve rate is fixed, so the cor
 
 **Data.** BigMathDigits: about 5,000 training questions, 1,000 validation, and the 1,000-question evaluation split used by RLCR and CALIBER. Get it from the RLCR release if available; otherwise rebuild it as RLCR describes (Big-Math, numeric answers, Llama-8B solve rate 0–70%). OOD: GPQA Diamond (198), a 1,000-question TriviaQA subset, a 1,000-question SimpleQA subset.
 
-**Rollouts.** Qwen3.5-2B instruct, temperature 0.7, max 1,024 new tokens, with vLLM. n = 32 for every question (training, validation, test and OOD), so training targets and evaluation see the same n. Store every rollout (answer, correct, length) and per-question k, n as parquet in GCS.
+**Rollouts.** Qwen3.5-2B instruct, temperature 0.7, max 2,048 new tokens, with vLLM. n = 32 for every question (training, validation, test and OOD), so training targets and evaluation see the same n. Store every rollout (answer, correct, length) and per-question k, n as parquet in GCS.
 
 **Features.** Hidden state at the final prompt token, before any generated token: last layer by default, plus one middle layer as an ablation. Cache them once to disk.
 
@@ -162,7 +162,7 @@ One policy forecasts its own solve rate, reasons, answers and states answer conf
 
 Here k₋ᵢ counts successes among the other rollouts in the group, so a rollout's own outcome never enters its forecast target. Implement routing in verl by replacing its advantage computation with per-span advantages built from tag masks.
 
-**Training.** Base: the next Qwen3.5 size up from 2B (verify sizes; fall back to 2B if budget is tight). LoRA. Start from the Stage 1 forecaster adapter, then 50–100 forecast-only warmup steps. 16 rollouts per prompt (32 if budget allows), about 128 prompts per step, about 200 steps, max 1,024 new tokens, no KL penalty, no std normalisation.
+**Training.** Base: the next Qwen3.5 size up from 2B (verify sizes; fall back to 2B if budget is tight). LoRA. Start from the Stage 1 forecaster adapter, then 50–100 forecast-only warmup steps. 16 rollouts per prompt (32 if budget allows), about 128 prompts per step, about 200 steps, max 2,048 new tokens, no KL penalty, no std normalisation.
 
 **Runs** (same data, steps and budget):
 

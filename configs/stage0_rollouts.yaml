@@ -7,7 +7,7 @@ model: Qwen/Qwen3.5-2B   # post-trained (instruct) model; Qwen/Qwen3.5-2B-Base i
 splits: [bigmath_train, bigmath_val, bigmath_test, gpqa_diamond, triviaqa, simpleqa]
 n: 32
 temperature: 0.7
-max_new_tokens: 1024
+max_new_tokens: 2048
 seed: 0
 shard_size: 250
 # Thinking off: the template emits an empty <think></think>, and the model reasons briefly in

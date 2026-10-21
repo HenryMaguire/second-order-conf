@@ -52,7 +52,7 @@ def config(tmp_path, monkeypatch):
         "splits": ["bigmath_val", "gpqa_diamond"],
         "n": 32,
         "temperature": 0.7,
-        "max_new_tokens": 1024,
+        "max_new_tokens": 2048,
         "shard_size": 3,
     }
     path = tmp_path / "cfg.yaml"
@@ -135,7 +135,7 @@ def test_judge_pass_adds_judged_counts(tmp_path, monkeypatch):
         "splits": ["triviaqa"],
         "n": 32,
         "temperature": 0.7,
-        "max_new_tokens": 1024,
+        "max_new_tokens": 2048,
     }
     path = tmp_path / "cfg.yaml"
     path.write_text(yaml.safe_dump(cfg))
