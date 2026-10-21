@@ -1,0 +1,61 @@
+# Frozen in week 1. Changing anything here invalidates every rollout made before.
+frozen_on: '2026-10-21'
+prompt_template:
+  version: answer-v1
+  hash: ffc660018ca2415d
+rollouts:
+  n: 32
+  temperature: 0.7
+  max_new_tokens: 1024
+seed: 20261021
+sources:
+  bigmath_train_pool:
+    hf_id: mehuldamani/big-math-digits
+    config: null
+    split: train
+    revision: c3c94f8eab5b5301bd71d9735c329951d80418a5
+  bigmath_test:
+    hf_id: mehuldamani/big-math-digits
+    config: null
+    split: test
+    revision: c3c94f8eab5b5301bd71d9735c329951d80418a5
+  gpqa_diamond:
+    hf_id: fingertap/GPQA-Diamond
+    config: null
+    split: test
+    revision: 68be7564497676e07a77a042fdb587deb88c51c3
+  triviaqa_val:
+    hf_id: mandarjoshi/trivia_qa
+    config: rc.nocontext
+    split: validation
+    revision: 0f7faf33a3908546c6fd5b73a660e0f8ff173c2f
+  simpleqa:
+    hf_id: basicv8vc/SimpleQA
+    config: null
+    split: test
+    revision: e319282ab125c3dbd0c7fd00be2e4dd54e7e8f94
+splits:
+  bigmath_train:
+    source: bigmath_train_pool
+    n: 5000
+    sha256: d8f0d05494ed2c1c77eee2086ba723e87de8f7bd90df4982293c74529a3e5600
+  bigmath_val:
+    source: bigmath_train_pool
+    n: 1000
+    sha256: d435f6f000c54afcf7b8f651801d7e1e2dfea6824221ee74aa54bf4100a00673
+  bigmath_test:
+    source: bigmath_test
+    n: 1000
+    sha256: 4d7c12cfaf9009f1192f95c811b69ae1af35c670797f4f8393c2bf4958815f27
+  gpqa_diamond:
+    source: gpqa_diamond
+    n: 198
+    sha256: 002c1bbfe04c61d0f053a67fd3b5eef8e0a858a8ddbb1d46dbc3d55275eb29b5
+  triviaqa:
+    source: triviaqa_val
+    n: 1000
+    sha256: dbdfbb2d85feddfcf7c84bd425614addb1040802da50a1c2e0706a6cf14c57cd
+  simpleqa:
+    source: simpleqa
+    n: 1000
+    sha256: 73edcde1b0b815bd54c46c1f6369d4bb9a2f7eb93cd94904df4386b6cfc49ae5

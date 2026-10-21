@@ -1,0 +1,55 @@
+[project]
+name = "second-order-conf"
+version = "0.1.0"
+description = "Training language models to state a calibrated spread around their own solve rate."
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.26",
+    "scipy>=1.11",
+    "pyyaml>=6.0",
+    "math-verify>=0.5",
+    "pandas>=2.2",
+    "pyarrow>=16",
+]
+
+[project.optional-dependencies]
+# Stage 0 heads and anything else that needs autograd.
+train = ["torch>=2.3"]
+# Building and loading the frozen splits from the Hugging Face Hub.
+data = ["datasets>=3.0"]
+# LLM judge for TriviaQA/SimpleQA evaluation.
+judge = ["anthropic>=0.70"]
+# GPU-VM-only stack; installed on the VM, never in CI.
+gpu = [
+    "torch>=2.3",
+    "vllm>=0.6",
+    "transformers>=4.45",
+    "datasets>=3.0",
+    "pyarrow>=16",
+    "wandb>=0.18",
+    "anthropic>=0.70",
+    "google-cloud-storage>=2.18",
+]
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/soc"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "NPY"]

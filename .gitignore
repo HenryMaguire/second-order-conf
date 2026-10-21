@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+dist/
+*.egg-info/
+.env
+wandb/
+outputs/
+cache/
+*.parquet
+*.safetensors
+*.pt
+.DS_Store
+scripts/gcp/env.sh
