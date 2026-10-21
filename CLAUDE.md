@@ -21,8 +21,8 @@ decisions, gates and the task list.
 ## Rules
 
 - Never launch, resize or delete GCP resources. Write the script, then stop and ask for approval.
-- Every run logs its config, git commit and seed to W&B and writes outputs to
-  `gs://$SOC_BUCKET/<stage>/<run_id>/`.
+- Every run records its config, git commit and seed in `run.json` and writes outputs to
+  `gs://$SOC_BUCKET/<stage>/<run_id>/`. W&B is off for now (`wandb_project: null`).
 - Train/val/test splits and the prompt template are frozen in week 1; their hashes are recorded
   in `configs/frozen.yaml`. Target rollouts and evaluation rollouts share template and
   temperature (0.7).

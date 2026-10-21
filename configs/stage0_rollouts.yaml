@@ -17,4 +17,4 @@ vllm:
   revision: 15852e8c16360a2fea060d615a32b45270f8a8fc   # pinned 2026-10-21
   max_model_len: 4096
   gpu_memory_utilization: 0.9
-wandb_project: second-order-conf
+wandb_project: null   # W&B off for now; run.json still records config, commit and seed

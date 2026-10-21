@@ -9,4 +9,4 @@ export SOC_REPO_URL="https://github.com/<you>/second-order-conf.git"
 #   gcloud compute images list --project deeplearning-platform-release \
 #     --filter="family~pytorch AND family~cu12" --format="value(family)" | sort -u
 export SOC_IMAGE_PROJECT="deeplearning-platform-release"
-export SOC_IMAGE_FAMILY="pytorch-2-7-cu128-ubuntu-2204-nvidia-570"
+export SOC_IMAGE_FAMILY="pytorch-2-9-cu129-ubuntu-2204-nvidia-580"
