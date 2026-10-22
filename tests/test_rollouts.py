@@ -124,8 +124,9 @@ def test_judge_pass_adds_judged_counts(tmp_path, monkeypatch):
                     outs.append([Sample("<answer>M. Sugeno</answer>", 3, "stop")] * n)
                 else:
                     outs.append(
-                        [Sample("<answer>paris</answer>", 3, "stop")] * (n - 1)
+                        [Sample("<answer>paris</answer>", 3, "stop")] * (n - 2)
                         + [Sample("<answer>Lyon</answer>", 3, "stop")]
+                        + [Sample("no tags at all", 3, "stop")]  # missing answer -> NaN
                     )
             return outs
 
@@ -160,8 +161,8 @@ def test_judge_pass_adds_judged_counts(tmp_path, monkeypatch):
     client = Client()
     client.messages = client
     counts = judge_split(out, "triviaqa", Judge(tmp_path / "j.sqlite", client=client), load=load)
-    assert counts.k.tolist() == [0, 31]  # exact match only
-    assert counts.k_judged.tolist() == [32, 31]
+    assert counts.k.tolist() == [0, 30]  # exact match only
+    assert counts.k_judged.tolist() == [32, 30]
     assert Client.calls == 2  # one call per distinct non-matching answer
 
 

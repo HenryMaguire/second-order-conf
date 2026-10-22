@@ -32,7 +32,7 @@ def judge_split(run_dir: Path, split: str, judge, load=None) -> pd.DataFrame:
     todo = {
         (r.qid, r.answer)
         for r in df.itertuples()
-        if r.answer is not None and not exact_match(r.answer, golds(questions[r.qid]))
+        if isinstance(r.answer, str) and not exact_match(r.answer, golds(questions[r.qid]))
     }
     items = sorted(todo)
     verdicts = judge.grade_many(
@@ -41,7 +41,7 @@ def judge_split(run_dir: Path, split: str, judge, load=None) -> pd.DataFrame:
     correct_by = {key: v == "CORRECT" for key, v in zip(items, verdicts, strict=True)}
 
     def grade(qid, ans):
-        if ans is None:
+        if not isinstance(ans, str):  # missing answers come back from parquet as None or NaN
             return False
         return exact_match(ans, golds(questions[qid])) or correct_by[(qid, ans)]
 
