@@ -10,7 +10,10 @@ identically. Rows 1-3 are the baselines the main method has to beat:
                        can depend on predicted difficulty and nothing else.
 4. LinearBetaHead      linear map to (alpha, beta), Beta-Binomial NLL. The main method.
 5. MLPBetaHead         2-layer MLP version: capacity check.
-(6. Laplace on the linear head is optional in the plan and not implemented yet.)
+6. LaplaceBetaHead     Bayesian version: one global concentration for the irreducible spread,
+                       plus the head's own (epistemic) uncertainty about m from a Laplace
+                       approximation to the posterior over its weights. Its per-question spread
+                       grows where the features are far from the training data.
 
 Features are standardised on the training set. Weight decay is chosen on validation NLL.
 """
@@ -234,6 +237,94 @@ class MLPBetaHead(LinearBetaHead):
     hidden = 256
 
 
+class LaplaceBetaHead:
+    """Bayesian logistic-mean head with a Laplace posterior over its weights.
+
+    Model: p ~ Beta(m c, (1 - m) c) with m = sigmoid(w . z + b) on PCA features z and one
+    global concentration c; k ~ Binomial(n, p). The MAP fit minimises the Beta-Binomial NLL plus
+    a Gaussian prior (precision `prior`) on w. The Laplace approximation gives a Gaussian
+    posterior over (w, b) with covariance H^-1 (H = Hessian at the MAP, prior included).
+
+    Predictive spread (law of total variance over posterior samples of m):
+        Var(p | x) = E[m (1 - m)] / (c + 1) + Var[m]
+    i.e. the global irreducible spread plus the head's epistemic uncertainty about m. The
+    result is moment-matched to a Beta so it can be stated as m +- s.
+    """
+
+    PRIORS = (1e-2, 1e-1, 1.0, 10.0, 100.0)
+    n_samples = 512
+
+    def _fit_map(self, z, k, n, prior):
+        d = z.shape[1]
+        theta = torch.zeros(d + 2, dtype=torch.float64, requires_grad=True)  # w, b, log c
+        with torch.no_grad():
+            theta[-1] = 1.0
+        opt = torch.optim.LBFGS([theta], max_iter=500, line_search_fn="strong_wolfe")
+
+        def loss_fn(t):
+            m = torch.sigmoid(z @ t[:d] + t[d]).clamp(1e-4, 1 - 1e-4)
+            c = torch.exp(t[-1].clamp(-2.3, 9.2))
+            nll = betabinom_nll_torch(k, n, m * c, (1 - m) * c).sum()
+            return nll + 0.5 * prior * (t[:d] ** 2).sum()
+
+        def closure():
+            opt.zero_grad()
+            loss = loss_fn(theta)
+            loss.backward()
+            return loss
+
+        opt.step(closure)
+        theta = theta.detach()
+        # Laplace: Hessian of the full objective w.r.t. (w, b), with log c held at its MAP.
+        log_c = theta[-1]
+
+        def wb_loss(wb):
+            return loss_fn(torch.cat([wb, log_c.reshape(1)]))
+
+        hess = torch.autograd.functional.hessian(wb_loss, theta[:-1])
+        hess = 0.5 * (hess + hess.T) + 1e-6 * torch.eye(d + 1, dtype=torch.float64)
+        return theta, torch.linalg.inv(hess)
+
+    def _moments(self, x):
+        z = self.std(x).double()
+        z1 = torch.cat([z, torch.ones(len(z), 1, dtype=torch.float64)], 1)
+        gen = torch.Generator().manual_seed(0)
+        eps = torch.randn(self.n_samples, len(self.wb), generator=gen, dtype=torch.float64)
+        samples = self.wb + eps @ self.chol.T  # [S, d + 1] posterior draws of (w, b)
+        m = torch.sigmoid(z1 @ samples.T).clamp(1e-4, 1 - 1e-4)  # [N, S]
+        m_bar = m.mean(1)
+        epistemic = m.var(1)
+        total = (m * (1 - m)).mean(1) / (self.c + 1) + epistemic
+        return m_bar.numpy(), np.sqrt(total.numpy()), epistemic.numpy()
+
+    def fit(self, train: Data, val: Data):
+        k = torch.as_tensor(np.array(train.k, dtype=np.float64))
+        n = torch.as_tensor(np.array(train.n, dtype=np.float64))
+        limit = min(train.x.shape[1], len(train.k) - 1)
+        comps = [c for c in N_COMPONENTS if c < limit] or [None]
+        best = None
+        for n_comp in comps:
+            std = _Standardiser(n_comp).fit(train.x)
+            z = std(train.x).double()
+            for prior in self.PRIORS:
+                theta, cov = self._fit_map(z, k, n, prior)
+                self.std, self.wb, self.c = std, theta[:-1], float(torch.exp(theta[-1]))
+                self.chol = torch.linalg.cholesky(cov)
+                val_nll = _mean_nll(*self.predict(val.x), val)
+                if best is None or val_nll < best[0]:
+                    best = (val_nll, std, self.wb, self.c, self.chol, (n_comp, prior))
+        _, self.std, self.wb, self.c, self.chol, self.config = best
+        return self
+
+    def predict(self, x):
+        m, s, _ = self._moments(x)
+        return ms_to_ab(m, s)
+
+    def epistemic_sd(self, x) -> np.ndarray:
+        """Standard deviation of m across the weight posterior (the per-question part)."""
+        return np.sqrt(self._moments(x)[2])
+
+
 def fit_all(train: Data, val: Data) -> dict:
     point = PointHead().fit(train, val)
     return {
@@ -242,6 +333,7 @@ def fit_all(train: Data, val: Data) -> dict:
         "difficulty_spread": DifficultySpreadHead(point).fit(train, val),
         "linear_beta": LinearBetaHead().fit(train, val),
         "mlp_beta": MLPBetaHead().fit(train, val),
+        "laplace_beta": LaplaceBetaHead().fit(train, val),
     }
 
 

@@ -99,3 +99,31 @@ def test_empirical_bayes_comparison_is_paired():
     e1 = stage0.empirical_bayes_error(a, b, outcomes, 4)
     e2 = stage0.empirical_bayes_error(a, b, outcomes, 4)
     assert np.array_equal(e1, e2)  # same splits for every head
+
+
+def test_laplace_spread_grows_off_distribution(tmp_path):
+    from soc.forecast.beta import ab_to_ms
+    from soc.head.heads import LaplaceBetaHead
+
+    run = make_run(tmp_path, informative_spread=False, seed=4)
+    (train, _), (val, _), (test, _) = (stage0.load(run, s, "last") for s in stage0.SPLITS)
+    head = LaplaceBetaHead().fit(train, val)
+    # A moderate translation away from the training data raises the epistemic part. (It is not
+    # monotone: far enough out the sigmoid saturates and Var[m] shrinks again.)
+    u = np.random.default_rng(0).normal(size=train.x.shape[1])
+    u *= 5 * train.x.std(0).mean() * np.sqrt(train.x.shape[1]) / 4 / np.linalg.norm(u)
+    near = np.median(head.epistemic_sd(test.x))
+    shifted = np.median(head.epistemic_sd(test.x + u))
+    assert shifted > 1.5 * near
+    # In-domain the epistemic part is small next to the irreducible spread.
+    _, s = ab_to_ms(*head.predict(test.x))
+    assert near < 0.5 * np.median(s)
+
+
+def test_laplace_in_report(tmp_path):
+    report = stage0.run(make_run(tmp_path, informative_spread=False, seed=5))
+    table = {r["head"]: r for r in report["table"]}
+    assert "laplace_beta" in table
+    # With a constant true spread, Laplace should match the global head, not lose to it badly.
+    assert table["laplace_beta"]["nll"] < table["global_spread"]["nll"] + 0.05
+    assert 0.7 <= table["laplace_beta"]["cov80"] <= 0.9

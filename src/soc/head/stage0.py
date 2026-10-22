@@ -103,6 +103,7 @@ def run(run_dir: Path, layer: str = "last") -> dict:
     def diff(a, b):
         return bootstrap_ci(lambda x, y: float((x - y).mean()), nlls[a], nlls[b])
 
+    laplace_vs_global = diff("laplace_beta", "global_spread")
     vs_global, vs_difficulty = (
         diff("linear_beta", "global_spread"),
         diff("linear_beta", "difficulty_spread"),
@@ -122,13 +123,15 @@ def run(run_dir: Path, layer: str = "last") -> dict:
         "n_test": len(test.k),
         "layer": layer,
         "chosen_config (components, weight_decay)": {
-            name: heads[name].config for name in ("point", "linear_beta", "mlp_beta")
+            name: heads[name].config
+            for name in ("point", "linear_beta", "mlp_beta", "laplace_beta")
         },
         "global_concentration": heads["global_spread"].c,
         "table": rows,
         "nll_diff_linear_minus_global": vs_global,
         "nll_diff_linear_minus_difficulty": vs_difficulty,
         "eb_r4_diff_linear_minus_global": eb_ci,
+        "nll_diff_laplace_minus_global": laplace_vs_global,
         "gate": gate,
         "gate_passed": all(gate.values()),
     }
@@ -147,6 +150,7 @@ def main(argv):
         "nll_diff_linear_minus_global",
         "nll_diff_linear_minus_difficulty",
         "eb_r4_diff_linear_minus_global",
+        "nll_diff_laplace_minus_global",
     ):
         est, lo, hi = report[key]
         print(f"{key}: {est:+.4f}  95% CI [{lo:+.4f}, {hi:+.4f}]")
