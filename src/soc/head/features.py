@@ -62,7 +62,9 @@ def extract(questions, tok, model, chat_template_kwargs: dict, batch_size: int =
         ]
         enc = tok(texts, return_tensors="pt", padding=True, add_special_tokens=False).to("cuda")
         with torch.no_grad():
-            res = model(**enc, output_hidden_states=True)
+            # logits_to_keep=1: we only need hidden states, and full-vocabulary logits at every
+            # position (~250k x seq x batch) ran out of memory on long GPQA prompts.
+            res = model(**enc, output_hidden_states=True, logits_to_keep=1)
         states = final_token_states(res.hidden_states, list(layers.values()))
         for name, layer in layers.items():
             out[name].append(states[layer].astype(np.float16))
