@@ -5,7 +5,10 @@
 #
 # 1. For up to N minutes, once a minute: try to start the existing spot VM (soc-l4, zone a),
 #    and try to create a spot VM (soc-l4-b) in each other zone of the region.
-# 2. If none succeed, switch soc-l4 to on-demand (standard) pricing and start it.
+# 2. If none succeed, switch soc-l4 to on-demand (standard) pricing and start it, falling back
+#    to the smaller g2-standard-4 host if g2-standard-8 is out of stock.
+# Note: the region's SSD quota is 500 GB, so a second VM (soc-l4-b) needs a disk of at most
+# 200 GB while soc-l4's 300 GB disk exists.
 # On success the chain resumes by itself on soc-l4 (its startup script re-runs unfinished jobs);
 # on a newly created VM this script registers and starts the chain over SSH.
 set -uo pipefail
@@ -26,7 +29,7 @@ create_alt() {  # $1 = zone
     --provisioning-model SPOT --instance-termination-action STOP \
     --maintenance-policy TERMINATE \
     --image-project "$SOC_IMAGE_PROJECT" --image-family "$SOC_IMAGE_FAMILY" \
-    --boot-disk-size 300GB --boot-disk-type pd-ssd --scopes cloud-platform \
+    --boot-disk-size 150GB --boot-disk-type pd-ssd --scopes cloud-platform \
     --metadata "install-nvidia-driver=True,soc-bucket=$SOC_BUCKET,soc-repo-url=$SOC_REPO_URL" \
     --metadata-from-file "startup-script=$here/vm_startup.sh,shutdown-script=$here/vm_shutdown.sh" \
     >/dev/null 2>&1
@@ -65,11 +68,20 @@ while (( $(date +%s) < deadline )); do
 done
 
 log "no spot capacity after $minutes min; switching $home_vm to on-demand"
+# Both flags are needed: a VM created as spot is also marked preemptible.
 "$G" compute instances set-scheduling "$home_vm" --zone "$home_zone" --project "$SOC_PROJECT" \
-  --provisioning-model STANDARD --clear-instance-termination-action || { log "could not switch to on-demand"; exit 1; }
-if "$G" compute instances start "$home_vm" --zone "$home_zone" --project "$SOC_PROJECT" -q; then
-  log "on-demand $home_vm started; chain resumes at boot"
-else
-  log "on-demand start failed too (no standard capacity in $home_zone)"
-  exit 1
-fi
+  --provisioning-model STANDARD --no-preemptible --clear-instance-termination-action ||
+  { log "could not switch to on-demand"; exit 1; }
+# On-demand L4s can be out of stock too; the smaller g2-standard-4 host (same L4, 4 vCPU,
+# 16 GB RAM, enough for a 2B model) draws on a different pool and worked on 2026-10-22.
+for machine in g2-standard-8 g2-standard-4; do
+  "$G" compute instances set-machine-type "$home_vm" --zone "$home_zone" \
+    --project "$SOC_PROJECT" --machine-type "$machine" >/dev/null 2>&1
+  if "$G" compute instances start "$home_vm" --zone "$home_zone" --project "$SOC_PROJECT" \
+      -q >/dev/null 2>&1; then
+    log "on-demand $home_vm ($machine) started; chain resumes at boot"
+    exit 0
+  fi
+  log "no on-demand capacity for $machine in $home_zone"
+done
+exit 1
