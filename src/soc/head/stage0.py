@@ -48,9 +48,11 @@ def load(run_dir: Path, split: str, layer: str) -> tuple[Data, pd.DataFrame]:
     return Data(x=x, k=counts.k.to_numpy(), n=counts.n.to_numpy()), outcomes
 
 
-def empirical_bayes_error(alpha, beta, outcomes, r: int, rng, repeats: int = 20) -> np.ndarray:
+def empirical_bayes_error(alpha, beta, outcomes, r: int, seed: int = 0, repeats: int = 20):
     """Per-question squared error of the posterior mean after r observed rollouts, against the
-    solve rate of the remaining rollouts; averaged over random splits of the rollouts."""
+    solve rate of the remaining rollouts; averaged over random splits of the rollouts. The splits
+    depend only on `seed`, so every head is scored on the same splits (a paired comparison)."""
+    rng = np.random.default_rng(seed)
     errs = np.zeros(len(outcomes))
     for _ in range(repeats):
         for i, o in enumerate(outcomes):
@@ -78,7 +80,7 @@ def score(name, alpha, beta, test: Data, outcomes, seed=0) -> tuple[dict, np.nda
         "mean_s": float(s.mean()),
     }
     for r in EB_R:
-        row[f"eb_mse_r{r}"] = float(empirical_bayes_error(alpha, beta, outcomes, r, rng).mean())
+        row[f"eb_mse_r{r}"] = float(empirical_bayes_error(alpha, beta, outcomes, r).mean())
     return row, nll
 
 
@@ -93,9 +95,8 @@ def run(run_dir: Path, layer: str = "last") -> dict:
         rows.append(row)
         nlls[name] = nll
 
-    rng = np.random.default_rng(1)
     eb = {
-        name: empirical_bayes_error(*preds[name], outcomes, 4, rng)
+        name: empirical_bayes_error(*preds[name], outcomes, 4)
         for name in ("linear_beta", "global_spread")
     }
 

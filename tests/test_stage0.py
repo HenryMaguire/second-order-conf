@@ -90,3 +90,12 @@ def test_final_token_states_takes_last_position():
     out = final_token_states(hs, [0, 2])
     assert out[2].shape == (2, 4)
     assert np.allclose(out[2][0], hs[2][0, -1].numpy())
+
+
+def test_empirical_bayes_comparison_is_paired():
+    rng = np.random.default_rng(0)
+    outcomes = pd.Series([rng.random(32) < 0.4 for _ in range(30)])
+    a, b = np.full(30, 2.0), np.full(30, 3.0)
+    e1 = stage0.empirical_bayes_error(a, b, outcomes, 4)
+    e2 = stage0.empirical_bayes_error(a, b, outcomes, 4)
+    assert np.array_equal(e1, e2)  # same splits for every head
