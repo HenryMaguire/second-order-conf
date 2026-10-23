@@ -38,6 +38,10 @@ SPECS = [
     SplitSpec("gpqa_diamond", "gpqa_diamond", None),
     SplitSpec("triviaqa", "triviaqa_val", 1000),
     SplitSpec("simpleqa", "simpleqa", 1000),
+    # AmbigQA pilot (1,832 questions, ambiguous and single-answer mixed): ~60/20/20.
+    SplitSpec("ambigqa_train", "ambigqa_pool", 1100, offset=0),
+    SplitSpec("ambigqa_val", "ambigqa_pool", 366, offset=1100),
+    SplitSpec("ambigqa_test", "ambigqa_pool", None, offset=1466),
 ]
 
 
@@ -66,21 +70,29 @@ def split_hash(questions: list[Question]) -> str:
     return hashlib.sha256(text.encode()).hexdigest()
 
 
-def build_all(load=load_source) -> dict[str, list[Question]]:
-    pools = {name: load(name) for name in {s.source for s in SPECS}}
-    # Questions that also appear in the test set never enter train or val.
-    test_ids = {q.qid for q in pools["bigmath_test"]}
+def build_all(load=load_source, names: set[str] | None = None) -> dict[str, list[Question]]:
+    """Build every split, or only `names` (so new splits can be frozen without touching old)."""
+    specs = [s for s in SPECS if names is None or s.name in names]
+    pools = {name: load(name) for name in {s.source for s in specs}}
+    # BigMath questions that also appear in its test set never enter train or val.
+    test_ids = (
+        {q.qid for q in (pools.get("bigmath_test") or load("bigmath_test"))}
+        if ("bigmath_train_pool" in pools)
+        else set()
+    )
     pools = {
         name: _dedupe(qs, exclude=test_ids if name == "bigmath_train_pool" else set())
         for name, qs in pools.items()
     }
-    return {spec.name: select(spec, pools[spec.source]) for spec in SPECS}
+    return {spec.name: select(spec, pools[spec.source]) for spec in specs}
 
 
 def freeze(splits: dict[str, list[Question]], out_dir: Path = SPLITS_DIR) -> dict[str, str]:
     out_dir.mkdir(parents=True, exist_ok=True)
     hashes = {}
     for spec in SPECS:
+        if spec.name not in splits:
+            continue
         qs = splits[spec.name]
         hashes[spec.name] = split_hash(qs)
         record = {
@@ -112,9 +124,15 @@ def load_split(name: str, splits_dir: Path = SPLITS_DIR, load=load_source) -> li
 def main(argv: list[str]) -> None:
     cmd = argv[1] if len(argv) > 1 else "check"
     if cmd == "freeze":
-        if any(SPLITS_DIR.glob("*.json")) and "--force" not in argv:
-            sys.exit("splits already frozen; pass --force to overwrite (you almost never want to)")
-        for name, h in freeze(build_all()).items():
+        # freeze [--only a,b,c] [--force]: refuses to overwrite an existing split file.
+        only = set(argv[argv.index("--only") + 1].split(",")) if "--only" in argv else None
+        names = only or {s.name for s in SPECS}
+        existing = [n for n in names if (SPLITS_DIR / f"{n}.json").exists()]
+        if existing and "--force" not in argv:
+            sys.exit(
+                f"already frozen: {existing}; pass --force to overwrite (you almost never want to)"
+            )
+        for name, h in freeze(build_all(names=names)).items():
             print(f"{name}: {h}")
     elif cmd == "check":
         for spec in SPECS:

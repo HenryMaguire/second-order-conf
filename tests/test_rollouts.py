@@ -209,3 +209,7 @@ def test_parse_shards():
         "bigmath_train": 4,
         "bigmath_val": 2,
     }
+
+
+def test_ambigqa_config_matches_frozen():
+    R.check_frozen(R.RolloutConfig.from_yaml(R.ROOT / "configs" / "stage0_ambigqa.yaml"))

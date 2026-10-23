@@ -98,6 +98,53 @@ def _simpleqa(rows):
     ]
 
 
+def _ambigqa(rows):
+    """AmbigQA (validation, full config): questions every annotator marked ambiguous
+    ("multipleQAs") or every annotator marked single-answer; disagreements are dropped.
+
+    Gold is the original Natural Questions answer, so on an ambiguous question the solve rate
+    measures which reading the model prefers. All readings' answers are kept in meta so the
+    rollouts can also be scored against "any valid reading". The qid encodes the group
+    (aqa-amb-* / aqa-sgl-*) for the per-group spread baseline.
+    """
+    out = []
+    for r in rows:
+        ann, nq = r["annotations"], [a for a in r["nq_answer"] if a.strip()]
+        types = ann["type"]
+        if not nq or not types or len(set(types)) != 1:
+            continue
+        ambiguous = types[0] == "multipleQAs"
+        if ambiguous:
+            readings = [list(ans) for pairs in ann["qaPairs"] for ans in pairs["answer"] if ans]
+        else:
+            readings = [list(a) for a in ann["answer"] if a]
+        nq_norm = {_norm(a) for a in nq}
+        # Aliases for the NQ answer: the NQ strings plus any reading that contains one of them.
+        aliases = list(
+            dict.fromkeys(
+                [*nq, *(a for rd in readings if nq_norm & {_norm(x) for x in rd} for a in rd)]
+            )
+        )
+        out.append(
+            Question(
+                qid=f"aqa-{'amb' if ambiguous else 'sgl'}-{r['id']}",
+                dataset="ambigqa",
+                kind="short",
+                problem=r["question"],
+                gold=nq[0],
+                aliases=tuple(aliases),
+                meta={"ambiguous": ambiguous, "readings": readings},
+            )
+        )
+    return out
+
+
+def _norm(text: str) -> str:
+    from soc.verify.checks import normalize
+
+    return normalize(text)
+
+
 BIGMATH_REV = "c3c94f8eab5b5301bd71d9735c329951d80418a5"
 
 SOURCES: dict[str, Source] = {
@@ -130,6 +177,15 @@ SOURCES: dict[str, Source] = {
             "validation",
             _triviaqa,
             config="rc.nocontext",
+        ),
+        # Pilot: ambiguous vs single-answer questions (validation has 2-3 annotators each).
+        Source(
+            "ambigqa_pool",
+            "sewon/ambig_qa",
+            "e969d0132f4dd28c2939d55be34f1788c00ccfe7",
+            "validation",
+            _ambigqa,
+            config="full",
         ),
         Source(
             "simpleqa",

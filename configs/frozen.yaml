@@ -34,6 +34,11 @@ sources:
     config: null
     split: test
     revision: e319282ab125c3dbd0c7fd00be2e4dd54e7e8f94
+  ambigqa_pool:
+    hf_id: sewon/ambig_qa
+    config: full
+    split: validation
+    revision: e969d0132f4dd28c2939d55be34f1788c00ccfe7
 splits:
   bigmath_train:
     source: bigmath_train_pool
@@ -59,3 +64,15 @@ splits:
     source: simpleqa
     n: 1000
     sha256: 73edcde1b0b815bd54c46c1f6369d4bb9a2f7eb93cd94904df4386b6cfc49ae5
+  ambigqa_train:
+    source: ambigqa_pool
+    n: 1100
+    sha256: 6d9df7ba75502ca4dd3627e053a7356c29659c851fd9ac8246e43e65dd3423a5
+  ambigqa_val:
+    source: ambigqa_pool
+    n: 366
+    sha256: 297f0fd02f6f76f5c9f7d60e6ac1a5c2564d97d1910e8db2769ca5cc003ea1e3
+  ambigqa_test:
+    source: ambigqa_pool
+    n: 366
+    sha256: 5f826640a3d82ee35c6e4c9dd118e285916740d609951d75ed765cc2361dcade

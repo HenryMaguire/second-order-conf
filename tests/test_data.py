@@ -29,6 +29,7 @@ def fake_pools():
         "gpqa_diamond": make("gpqa", 198, "mcq"),
         "triviaqa_val": make("tqa", 3000, "short"),
         "simpleqa": make("sqa", 4326, "short"),
+        "ambigqa_pool": make("aqa", 1832, "short"),
     }
 
 
@@ -50,6 +51,9 @@ def test_sizes_and_disjointness(frozen):
         "gpqa_diamond": 198,
         "triviaqa": 1000,
         "simpleqa": 1000,
+        "ambigqa_train": 1100,
+        "ambigqa_val": 366,
+        "ambigqa_test": 366,
     }
     train, val, test = (
         {q.qid for q in splits[k]} for k in ["bigmath_train", "bigmath_val", "bigmath_test"]
@@ -106,3 +110,20 @@ def test_clean_pool_drops_conflicts_and_dedupes():
 
     pool = [mk("a", "1"), mk("b", "2"), mk("a", "1"), mk("c", "3"), mk("b", "5")]
     assert [x.qid for x in clean_pool(pool)] == ["a", "c"]
+
+
+def test_build_subset_only_loads_needed_sources():
+    pools = fake_pools()
+    loaded = []
+
+    def load(name):
+        loaded.append(name)
+        return pools[name]
+
+    splits = S.build_all(load=load, names={"ambigqa_train", "ambigqa_val", "ambigqa_test"})
+    assert set(splits) == {"ambigqa_train", "ambigqa_val", "ambigqa_test"}
+    assert set(loaded) == {"ambigqa_pool"}
+    ids = [{q.qid for q in splits[k]} for k in splits]
+    assert not (ids[0] & ids[1]) and not (ids[0] & ids[2]) and not (ids[1] & ids[2])
+    full = S.build_all(load=pools.__getitem__)
+    assert S.split_hash(full["ambigqa_val"]) == S.split_hash(splits["ambigqa_val"])

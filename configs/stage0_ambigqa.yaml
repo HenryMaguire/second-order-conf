@@ -1,0 +1,21 @@
+# AmbigQA pilot: does a per-question spread beat a per-group (ambiguous vs single) spread?
+# Same frozen settings as BigMath: answer-v2 template, n = 32, temperature 0.7, 2,048 tokens.
+# On the VM (after approval), rollouts then features:
+#   scripts/gcp/supervise.sh stage0 rollouts-ambigqa-qwen35-2b-v1 -- bash -c \
+#     "uv run --extra gpu python -m soc.rollouts.run configs/stage0_ambigqa.yaml && \
+#      uv run --extra gpu python -m soc.head.features configs/stage0_ambigqa.yaml \
+#        ambigqa_train ambigqa_val ambigqa_test"
+run_id: rollouts-ambigqa-qwen35-2b-v1
+model: Qwen/Qwen3.5-2B
+splits: [ambigqa_train, ambigqa_val, ambigqa_test]
+n: 32
+temperature: 0.7
+max_new_tokens: 2048
+seed: 0
+shard_size: 250
+chat_template_kwargs: {enable_thinking: false}
+vllm:
+  revision: 15852e8c16360a2fea060d615a32b45270f8a8fc
+  max_model_len: 4096
+  gpu_memory_utilization: 0.9
+wandb_project: null
