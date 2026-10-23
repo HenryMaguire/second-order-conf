@@ -41,6 +41,7 @@ class Data:
     x: np.ndarray  # [N, D] features
     k: np.ndarray  # [N] successes
     n: np.ndarray  # [N] rollouts
+    g: np.ndarray | None = None  # [N] group labels (e.g. ambiguous / single), if any
 
 
 class _Standardiser:
@@ -149,6 +150,32 @@ class GlobalSpreadHead:
     def predict(self, x):
         m = np.clip(self.point.predict_m(x), 1e-3, 1 - 1e-3)
         return m * self.c, (1 - m) * self.c
+
+
+class GroupSpreadHead:
+    """PointHead's m with one concentration per group (e.g. ambiguous vs single-answer),
+    fitted on validation. The honest baseline on mixed data: a per-question spread has to beat
+    knowing which kind of question it is, not just one global spread."""
+
+    def __init__(self, point: PointHead):
+        self.point = point
+
+    def fit(self, train: Data, val: Data):
+        fallback = GlobalSpreadHead(self.point).fit(train, val).c
+        self.c = {}
+        for group in np.unique(val.g):
+            mask = val.g == group
+            sub = Data(x=val.x[mask], k=val.k[mask], n=val.n[mask])
+            self.c[group] = (
+                GlobalSpreadHead(self.point).fit(train, sub).c if mask.sum() else fallback
+            )
+        self.fallback = fallback
+        return self
+
+    def predict(self, x, g):
+        m = np.clip(self.point.predict_m(x), 1e-3, 1 - 1e-3)
+        c = np.array([self.c.get(group, self.fallback) for group in g])
+        return m * c, (1 - m) * c
 
 
 class DifficultySpreadHead:
@@ -330,6 +357,11 @@ def fit_all(train: Data, val: Data) -> dict:
     return {
         "point": point,
         "global_spread": GlobalSpreadHead(point).fit(train, val),
+        **(
+            {"group_spread": GroupSpreadHead(point).fit(train, val)}
+            if val.g is not None and len(np.unique(val.g)) > 1
+            else {}
+        ),
         "difficulty_spread": DifficultySpreadHead(point).fit(train, val),
         "linear_beta": LinearBetaHead().fit(train, val),
         "mlp_beta": MLPBetaHead().fit(train, val),

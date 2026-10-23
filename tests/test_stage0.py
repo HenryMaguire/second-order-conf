@@ -127,3 +127,49 @@ def test_laplace_in_report(tmp_path):
     # With a constant true spread, Laplace should match the global head, not lose to it badly.
     assert table["laplace_beta"]["nll"] < table["global_spread"]["nll"] + 0.05
     assert 0.7 <= table["laplace_beta"]["cov80"] <= 0.9
+
+
+def make_grouped_run(tmp_path, seed=0, sizes=(1100, 366, 366), dim=64):
+    """AmbigQA-shaped run: half 'amb' questions with mid-range, tightly concentrated solve rates,
+    half 'sgl' with all-or-nothing ones. The spread is set by the group alone."""
+    rng = np.random.default_rng(seed)
+    mix = rng.normal(size=(8, dim))
+    w_m = rng.normal(size=4)
+    for split, size in zip(stage0.splits_for("aqa_syn"), sizes, strict=True):
+        amb = rng.random(size) < 0.55
+        z = rng.normal(size=(size, 8))
+        z[:, 7] = np.where(amb, 1.5, -1.5)  # the group is visible in the features
+        x = (z @ mix + 0.5 * rng.normal(size=(size, dim))).astype(np.float32)
+        m = 1 / (1 + np.exp(-(z[:, :4] @ w_m) / 2))
+        c = np.where(amb, 20.0, 0.5)
+        p = rng.beta(m * c, (1 - m) * c)
+        outcomes = rng.random((size, N_ROLLOUTS)) < p[:, None]
+        qids = [f"aqa-{'amb' if a else 'sgl'}-{split}{i}" for i, a in enumerate(amb)]
+        for sub in ("rollouts/" + split, "counts", "features"):
+            (tmp_path / sub).mkdir(parents=True, exist_ok=True)
+        pd.DataFrame(
+            {
+                "qid": np.repeat(qids, N_ROLLOUTS),
+                "rollout": np.tile(np.arange(N_ROLLOUTS), size),
+                "correct": outcomes.ravel(),
+            }
+        ).to_parquet(tmp_path / "rollouts" / split / "shard-00000.parquet")
+        pd.DataFrame({"qid": qids, "k": outcomes.sum(1), "n": N_ROLLOUTS}).to_parquet(
+            tmp_path / "counts" / f"{split}.parquet"
+        )
+        np.savez(tmp_path / "features" / f"{split}.npz", qids=np.array(qids), last=x, middle=x)
+    return tmp_path
+
+
+def test_group_baseline_absorbs_group_level_spread(tmp_path):
+    report = stage0.run(make_grouped_run(tmp_path), splits=stage0.splits_for("aqa_syn"))
+    disp = report["dispersion_by_group (all splits)"]
+    assert (
+        disp["amb"]["share_intermediate (0.2<p<0.8)"]
+        > disp["sgl"]["share_intermediate (0.2<p<0.8)"]
+    )
+    assert report["group_concentrations"]["amb"] > 5 * report["group_concentrations"]["sgl"]
+    # Group-level spread: the per-group baseline clearly beats one global spread...
+    assert report["nll_diff_global_spread_minus_group"][1] > 0
+    # ...and a per-question head gains nothing real on top of it.
+    assert report["nll_diff_linear_beta_minus_group"][0] > -0.03
