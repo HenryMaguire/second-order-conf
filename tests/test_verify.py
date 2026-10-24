@@ -150,3 +150,14 @@ def test_verify_with_judge_skips_call_on_exact_match(tmp_path):
     assert not verify_with_judge(question, "<answer>Someone else</answer>", judge)
     assert not verify_with_judge(question, "no answer tag", judge)
     assert client.calls == 1
+
+
+def test_contains_match():
+    from soc.verify.checks import contains_match
+
+    assert contains_match("November 18, 2000", ["2000"])
+    assert contains_match("Central Station (Hauptbahnhof)", ["Hauptbahnhof"])
+    assert contains_match("Fascist", ["National Fascist Party"])  # answer inside gold
+    assert not contains_match("20001", ["2000"])  # whole words only
+    assert not contains_match("Mount Herbert", ["Ditchling Beacon"])
+    assert not contains_match("", ["x"])

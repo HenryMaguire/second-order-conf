@@ -92,3 +92,17 @@ def normalize(text: str) -> str:
 def exact_match(pred: str, golds: list[str] | tuple[str, ...]) -> bool:
     p = normalize(pred)
     return bool(p) and any(p == normalize(g) for g in golds)
+
+
+def contains_match(pred: str, golds: list[str] | tuple[str, ...]) -> bool:
+    """Lenient open-domain QA match: a normalised gold appears inside the normalised answer as
+    whole words (so "November 18, 2000" matches "2000"), or the answer inside a gold."""
+    p = normalize(pred)
+    if not p:
+        return False
+    padded = f" {p} "
+    for g in golds:
+        ng = normalize(g)
+        if ng and (f" {ng} " in padded or f" {p} " in f" {ng} "):
+            return True
+    return False

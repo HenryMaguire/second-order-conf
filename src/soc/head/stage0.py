@@ -1,7 +1,7 @@
 """Stage 0 report: fit every head, score on test, and check the Stage 0 -> 1 gate (PLAN.md).
 
     uv run --extra train python -m soc.head.stage0 RUN_DIR [--layer last|middle]
-        [--splits bigmath|ambigqa] [--scoring nq|any]
+        [--splits bigmath|ambigqa] [--scoring nq|any|nq_contains|any_contains]
 
 RUN_DIR holds counts/, rollouts/ and features/ for <prefix>_train/val/test (whatever prefix of
 each split has been generated so far, so it can run on early batches). Prints a table and writes
@@ -32,6 +32,7 @@ from soc.forecast.scores import betabinom_nll, rps
 from soc.head.heads import Data, constant_head, fit_all
 
 SPLITS = ("bigmath_train", "bigmath_val", "bigmath_test")
+EB_R = (1, 2, 4, 8)
 
 
 def splits_for(prefix: str) -> tuple[str, str, str]:
@@ -44,25 +45,29 @@ def group_of(qid: str) -> str:
     return parts[1] if parts[0] == "aqa" and len(parts) > 2 else "all"
 
 
-def any_reading_correct(rollouts: pd.DataFrame, split: str) -> pd.Series:
-    """Re-score rollouts: correct if the answer matches any valid reading's answer."""
+def rescore(rollouts: pd.DataFrame, split: str, scoring: str) -> pd.Series:
+    """Re-score stored rollouts. scoring = <golds>[_contains]:
+    golds "nq" = the original answer and its aliases, "any" = any valid reading's answers;
+    "_contains" = lenient whole-word containment instead of exact match."""
     from soc.data import load_split
-    from soc.verify.checks import exact_match
+    from soc.verify.checks import contains_match, exact_match
 
+    which, _, mode = scoring.partition("_")
+    match = contains_match if mode == "contains" else exact_match
     golds = {
-        q.qid: [*q.aliases, *(a for rd in q.meta.get("readings", []) for a in rd)]
+        q.qid: [
+            *q.aliases,
+            *((a for rd in q.meta.get("readings", []) for a in rd) if which == "any" else ()),
+        ]
         for q in load_split(split)
     }
     return pd.Series(
         [
-            isinstance(a, str) and exact_match(a, golds[q])
+            isinstance(a, str) and match(a, golds[q])
             for q, a in zip(rollouts.qid, rollouts.answer, strict=True)
         ],
         index=rollouts.index,
     )
-
-
-EB_R = (1, 2, 4, 8)
 
 
 def load(run_dir: Path, split: str, layer: str, scoring: str = "nq") -> tuple[Data, pd.DataFrame]:
@@ -74,8 +79,8 @@ def load(run_dir: Path, split: str, layer: str, scoring: str = "nq") -> tuple[Da
     rollouts = pd.concat(
         pd.read_parquet(p) for p in sorted((run_dir / "rollouts" / split).glob("shard-*.parquet"))
     )
-    if scoring == "any":
-        rollouts = rollouts.assign(correct=any_reading_correct(rollouts, split))
+    if scoring != "nq":
+        rollouts = rollouts.assign(correct=rescore(rollouts, split, scoring))
         k = rollouts.groupby("qid").correct.sum().reindex(counts.qid)
         counts = counts.assign(k=k.to_numpy().astype(int))
     outcomes = (
